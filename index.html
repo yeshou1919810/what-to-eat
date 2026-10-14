@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>今天吃什么？</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: url('bg.jpg') center / cover no-repeat;
+    background-color: #222;
+    background-attachment: scroll;
+    min-height: 100vh;
+    padding: 20px 16px 40px;
+    color: #333;
+    position: relative;
+  }
+  /* 背景遮罩层：顶部透明露脸，底部稍暗保证内容可读 */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(to bottom,
+      rgba(0, 0, 0, 0.05) 0%,
+      rgba(0, 0, 0, 0.15) 30%,
+      rgba(0, 0, 0, 0.35) 60%,
+      rgba(0, 0, 0, 0.5) 100%);
+    z-index: -1;
+    pointer-events: none;
+  }
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+  h1 {
+    text-align: center;
+    color: #fff;
+    font-size: 28px;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  }
+  .subtitle {
+    text-align: center;
+    color: rgba(255,255,255,0.85);
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: #444;
+  }
+  /* 预算选择 */
+  .budget-options {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .budget-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 12px 8px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    background: #fafafa;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #555;
+  }
+  .budget-btn.active {
+    border-color: #667eea;
+    background: #667eea;
+    color: #fff;
+    font-weight: 600;
+  }
+  /* 口味选择 */
+  .spicy-options, .type-options {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .spicy-btn, .type-btn {
+    padding: 10px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    background: #fafafa;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #555;
+  }
+  .spicy-btn.active, .type-btn.active {
+    border-color: #ff6b6b;
+    background: #ff6b6b;
+    color: #fff;
+    font-weight: 600;
+  }
+  .type-btn.active {
+    border-color: #4ecdc4;
+    background: #4ecdc4;
+  }
+  /* 推荐按钮 */
+  .recommend-btn {
+    width: 100%;
+    padding: 18px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(238, 90, 111, 0.4);
+    transition: transform 0.1s, box-shadow 0.2s;
+    margin-bottom: 16px;
+  }
+  .recommend-btn:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 8px rgba(238, 90, 111, 0.4);
+  }
+  /* 结果展示 */
+  .result-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    display: none;
+    text-align: center;
+  }
+  .result-card.show { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .result-emoji {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+  .result-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 10px;
+  }
+  .result-info {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .info-tag {
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .price-tag { background: #fff3e0; color: #e65100; }
+  .place-tag { background: #e3f2fd; color: #1565c0; }
+  .spicy-tag { background: #ffebee; color: #c62828; }
+  .nospicy-tag { background: #e8f5e9; color: #2e7d32; }
+  .type-tag { background: #f3e5f5; color: #7b1fa2; }
+  /* 黑名单按钮 */
+  .dislike-btn {
+    margin-top: 16px;
+    padding: 10px 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    background: #fafafa;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dislike-btn:active {
+    background: #ffebee;
+    border-color: #ef5350;
+    color: #c62828;
+  }
+  .clear-btn {
+    float: right;
+    padding: 4px 12px;
+    border: 1px solid #ffcdd2;
+    border-radius: 12px;
+    background: #fff;
+    color: #c62828;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  /* 无结果提示 */
+  .no-result {
+    background: #fff3e0;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    color: #e65100;
+    font-size: 15px;
+    display: none;
+    margin-bottom: 16px;
+  }
+  .no-result.show { display: block; }
+  /* 历史记录 */
+  .history-section {
+    margin-top: 8px;
+  }
+  .history-list {
+    font-size: 13px;
+    color: #888;
+    line-height: 1.6;
+  }
+  .history-list span {
+    display: inline-block;
+    background: #f5f5f5;
+    padding: 2px 8px;
+    border-radius: 8px;
+    margin: 2px 4px 2px 0;
+  }
+  /* 统计 */
+  .stats {
+    text-align: center;
+    color: rgba(255,255,255,0.8);
+    font-size: 13px;
+    margin-top: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🍜 今天吃什么？</h1>
+  <p class="subtitle">纠结吃啥？让命运帮你选！</p>
+
+  <!-- 预算筛选 -->
+  <div class="card">
+    <div class="card-title">💰 我的预算</div>
+    <div class="budget-options">
+      <button class="budget-btn" data-budget="10">10元内</button>
+      <button class="budget-btn active" data-budget="20">20元内</button>
+      <button class="budget-btn" data-budget="35">35元内</button>
+      <button class="budget-btn" data-budget="55">55元内</button>
+      <button class="budget-btn" data-budget="90">90元内</button>
+      <button class="budget-btn" data-budget="999">不设限</button>
+    </div>
+  </div>
+
+  <!-- 口味筛选 -->
+  <div class="card">
+    <div class="card-title">🌶️ 吃辣吗？</div>
+    <div class="spicy-options">
+      <button class="spicy-btn active" data-spicy="all">都行</button>
+      <button class="spicy-btn" data-spicy="yes">要吃辣</button>
+      <button class="spicy-btn" data-spicy="no">不吃辣</button>
+    </div>
+  </div>
+
+  <!-- 餐品种类 -->
+  <div class="card">
+    <div class="card-title">🍽️ 想吃什么类型？</div>
+    <div class="type-options">
+      <button class="type-btn active" data-type="all">全都要</button>
+      <button class="type-btn" data-type="rice">米饭</button>
+      <button class="type-btn" data-type="noodle">面食</button>
+      <button class="type-btn" data-type="snack">小吃</button>
+      <button class="type-btn" data-type="soup">汤/粥</button>
+      <button class="type-btn" data-type="bbq">烧烤</button>
+      <button class="type-btn" data-type="hotpot">火锅/煲</button>
+      <button class="type-btn" data-type="western">西餐/轻食</button>
+      <button class="type-btn" data-type="dessert">甜品</button>
+    </div>
+  </div>
+
+  <!-- 推荐按钮 -->
+  <button class="recommend-btn" id="recommendBtn">🎲 帮我选一个！</button>
+
+  <!-- 无结果提示 -->
+  <div class="no-result" id="noResult">
+    😅 哎呀，这个条件下没有合适的餐品了，试试放宽预算或口味吧！
+  </div>
+
+  <!-- 推荐结果 -->
+  <div class="result-card" id="resultCard">
+    <div class="result-emoji" id="resultEmoji">🍱</div>
+    <div class="result-name" id="resultName"></div>
+    <div class="result-info">
+      <span class="info-tag price-tag" id="resultPrice"></span>
+      <span class="info-tag place-tag" id="resultPlace"></span>
+      <span class="info-tag" id="resultSpicy"></span>
+      <span class="info-tag type-tag" id="resultType"></span>
+    </div>
+    <button class="dislike-btn" id="dislikeBtn">🙈 不想吃这个，加入黑名单</button>
+  </div>
+
+  <!-- 历史记录 -->
+  <div class="card history-section" id="historyCard" style="display:none;">
+    <div class="card-title">🕐 最近推荐过（不会重复推荐）</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <!-- 黑名单 -->
+  <div class="card history-section" id="blacklistCard" style="display:none;">
+    <div class="card-title">🙈 黑名单（不会再推荐） <button class="clear-btn" id="clearBlacklist">清空</button></div>
+    <div class="history-list" id="blacklistList"></div>
+  </div>
+
+  <p class="stats" id="stats"></p>
+
+  <!-- 推荐音效：公孙瓒"吃什么" -->
+  <audio id="recommendSound" src="chi-chi-shen-me.mp3" preload="auto"></audio>
+</div>
+
+<script>
+// ========== 餐品数据（55种，价格4元~168元） ==========
+const foods = [
+  // ---- 便宜档：4~8元（早餐/小吃） ----
+  { name: '葱油饼+豆浆', price: 6, place: '三食堂一楼', spicy: false, type: 'snack', emoji: '🥞' },
+  { name: '鸡蛋灌饼', price: 6, place: '东门外小摊', spicy: false, type: 'snack', emoji: '🌯' },
+  { name: '皮蛋瘦肉粥', price: 7, place: '二食堂一楼', spicy: false, type: 'soup', emoji: '🥣' },
+  { name: '馄饨汤', price: 7, place: '二食堂一楼', spicy: false, type: 'soup', emoji: '🥟' },
+  { name: '香菇滑鸡粥', price: 8, place: '一食堂三楼', spicy: false, type: 'soup', emoji: '🍚' },
+  { name: '沙县小吃蒸饺', price: 8, place: '西门外小吃街', spicy: false, type: 'snack', emoji: '🥟' },
+  { name: '肉包子+小米粥', price: 5, place: '三食堂一楼', spicy: false, type: 'snack', emoji: '🥟' },
+  { name: '茶叶蛋+豆腐脑', price: 4, place: '一食堂一楼', spicy: false, type: 'snack', emoji: '🥚' },
+
+  // ---- 中档：9~18元（食堂正餐/国产小吃） ----
+  { name: '番茄鸡蛋面', price: 9, place: '二食堂一楼', spicy: false, type: 'noodle', emoji: '🍜' },
+  { name: '酸辣粉', price: 9, place: '二食堂二楼', spicy: true, type: 'noodle', emoji: '🥡' },
+  { name: '炸鸡排', price: 10, place: '西门外小吃街', spicy: false, type: 'snack', emoji: '🍗' },
+  { name: '兰州炒饭', price: 10, place: '一食堂一楼', spicy: false, type: 'rice', emoji: '🍳' },
+  { name: '宫保鸡丁盖饭', price: 11, place: '一食堂二楼', spicy: true, type: 'rice', emoji: '🍚' },
+  { name: '牛肉拉面', price: 12, place: '一食堂一楼', spicy: false, type: 'noodle', emoji: '🍲' },
+  { name: '黄焖鸡米饭', price: 13, place: '一食堂二楼', spicy: true, type: 'rice', emoji: '🍛' },
+  { name: '红烧排骨面', price: 13, place: '三食堂一楼', spicy: false, type: 'noodle', emoji: '🍜' },
+  { name: '酸菜鱼粉', price: 14, place: '三食堂二楼', spicy: true, type: 'noodle', emoji: '🐟' },
+  { name: '麻辣烫', price: 15, place: '二食堂二楼', spicy: true, type: 'soup', emoji: '🥘' },
+  { name: '水煮肉片盖饭', price: 16, place: '三食堂三楼', spicy: true, type: 'rice', emoji: '🌶️' },
+  { name: '麻辣香锅', price: 18, place: '三食堂三楼', spicy: true, type: 'rice', emoji: '🌶️' },
+  { name: '鸡腿饭', price: 15, place: '一食堂二楼', spicy: false, type: 'rice', emoji: '🍗' },
+  { name: '螺蛳粉', price: 14, place: '西门外小吃街', spicy: true, type: 'noodle', emoji: '🍜' },
+  { name: '双皮奶+杨枝甘露', price: 18, place: '西门外糖水铺', spicy: false, type: 'dessert', emoji: '🍮' },
+
+  // ---- 日韩简餐：20~35元 ----
+  { name: '石锅拌饭', price: 22, place: '东门韩食店', spicy: true, type: 'rice', emoji: '🍚' },
+  { name: '韩式炸鸡(半份)', price: 28, place: '东门韩食店', spicy: false, type: 'western', emoji: '🍗' },
+  { name: '泡菜汤+米饭', price: 24, place: '东门韩食店', spicy: true, type: 'soup', emoji: '🥘' },
+  { name: '豚骨拉面', price: 26, place: '西门外日料店', spicy: false, type: 'noodle', emoji: '🍜' },
+  { name: '照烧鸡腿饭', price: 25, place: '西门外日料店', spicy: false, type: 'rice', emoji: '🍱' },
+  { name: '寿司拼盘(单人)', price: 30, place: '西门外日料店', spicy: false, type: 'western', emoji: '🍣' },
+  { name: '天妇罗炸虾饭', price: 32, place: '西门外日料店', spicy: false, type: 'rice', emoji: '🍤' },
+
+  // ---- 东南亚菜系：25~45元 ----
+  { name: '冬阴功汤面', price: 28, place: '南门泰餐店', spicy: true, type: 'noodle', emoji: '🍜' },
+  { name: '泰式炒河粉', price: 30, place: '南门泰餐店', spicy: false, type: 'noodle', emoji: '🍝' },
+  { name: '绿咖喱鸡饭', price: 32, place: '南门泰餐店', spicy: true, type: 'rice', emoji: '🍛' },
+  { name: '印度咖喱鸡饭+飞饼', price: 35, place: '北门南亚小馆', spicy: true, type: 'rice', emoji: '🍛' },
+
+  // ---- 西餐/意餐：25~50元 ----
+  { name: '轻食沙拉碗', price: 25, place: '校内咖啡店', spicy: false, type: 'western', emoji: '🥗' },
+  { name: '番茄肉酱意面', price: 28, place: '东门外西餐厅', spicy: false, type: 'western', emoji: '🍝' },
+  { name: '玛格丽特披萨(单人)', price: 38, place: '东门外西餐厅', spicy: false, type: 'western', emoji: '🍕' },
+  { name: '牛排意面套餐', price: 38, place: '东门外西餐厅', spicy: false, type: 'western', emoji: '🥩' },
+  { name: '牛肉塔可(两个)', price: 30, place: '商圈墨西哥餐厅', spicy: true, type: 'western', emoji: '🌮' },
+  { name: '鸡肉卷饼套餐', price: 32, place: '商圈墨西哥餐厅', spicy: false, type: 'western', emoji: '🌯' },
+  { name: '汉堡+薯条+可乐', price: 26, place: '商圈美式餐厅', spicy: false, type: 'western', emoji: '🍔' },
+
+  // ---- 火锅/烧烤/煲类：26~80元 ----
+  { name: '单人小火锅', price: 28, place: '西门外美食街', spicy: true, type: 'hotpot', emoji: '🍲' },
+  { name: '烤肉拌饭+大酱汤', price: 22, place: '东门外韩食店', spicy: false, type: 'rice', emoji: '🍱' },
+  { name: '烧烤双人套餐(单人份)', price: 35, place: '南门夜市', spicy: true, type: 'bbq', emoji: '🍢' },
+  { name: '黄焖羊肉煲', price: 32, place: '北门老饭馆', spicy: true, type: 'hotpot', emoji: '🍖' },
+  { name: '麻辣鸭脖+冒菜', price: 26, place: '南门美食城', spicy: true, type: 'bbq', emoji: '🌶️' },
+  { name: '芝士排骨(单人份)', price: 42, place: '东门韩食店', spicy: false, type: 'hotpot', emoji: '🧀' },
+  { name: '韩式部队火锅(人均)', price: 52, place: '东门韩料店', spicy: true, type: 'hotpot', emoji: '🍲' },
+  { name: '牛油火锅双人餐(人均)', price: 68, place: '市中心海底捞', spicy: true, type: 'hotpot', emoji: '🥘' },
+  { name: '烤鱼双人餐(人均)', price: 55, place: '西门外烤鱼店', spicy: true, type: 'hotpot', emoji: '🐟' },
+  { name: '自助烤肉(午市)', price: 79, place: '商圈自助餐厅', spicy: true, type: 'bbq', emoji: '🍖' },
+
+  // ---- 高档大餐/甜品：32~168元 ----
+  { name: '奶茶+蛋糕下午茶', price: 32, place: '校内茶饮店', spicy: false, type: 'dessert', emoji: '🧋' },
+  { name: '提拉米苏+拿铁', price: 36, place: '商圈咖啡馆', spicy: false, type: 'dessert', emoji: '🍰' },
+  { name: '三文鱼刺身定食', price: 68, place: '商圈日料店', spicy: false, type: 'western', emoji: '🐟' },
+  { name: '战斧牛排单人餐', price: 128, place: '商圈西餐厅', spicy: false, type: 'western', emoji: '🥩' },
+  { name: '寿喜烧自助(午市)', price: 168, place: '商圈日料自助', spicy: false, type: 'hotpot', emoji: '🍲' },
+];
+
+// ========== 状态 ==========
+let currentBudget = 20;
+let currentSpicy = 'all'; // all / yes / no
+let currentType = 'all';
+let recentHistory = []; // 最近推荐的餐品名称（最多3个）
+let blacklist = []; // 黑名单菜品名称
+let currentPick = null; // 当前推荐的菜品对象
+
+// 从 localStorage 读取黑名单
+try {
+  const saved = localStorage.getItem('food_blacklist');
+  if (saved) blacklist = JSON.parse(saved);
+} catch(e) { blacklist = []; }
+
+// ========== DOM 元素 ==========
+const budgetBtns = document.querySelectorAll('.budget-btn');
+const spicyBtns = document.querySelectorAll('.spicy-btn');
+const typeBtns = document.querySelectorAll('.type-btn');
+const recommendBtn = document.getElementById('recommendBtn');
+const resultCard = document.getElementById('resultCard');
+const noResult = document.getElementById('noResult');
+const resultEmoji = document.getElementById('resultEmoji');
+const resultName = document.getElementById('resultName');
+const resultPrice = document.getElementById('resultPrice');
+const resultPlace = document.getElementById('resultPlace');
+const resultSpicy = document.getElementById('resultSpicy');
+const resultType = document.getElementById('resultType');
+const dislikeBtn = document.getElementById('dislikeBtn');
+const historyCard = document.getElementById('historyCard');
+const historyList = document.getElementById('historyList');
+const blacklistCard = document.getElementById('blacklistCard');
+const blacklistList = document.getElementById('blacklistList');
+const clearBlacklistBtn = document.getElementById('clearBlacklist');
+const statsEl = document.getElementById('stats');
+
+// ========== 事件绑定 ==========
+budgetBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    budgetBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentBudget = parseInt(btn.dataset.budget);
+    updateStats();
+  });
+});
+
+spicyBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    spicyBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSpicy = btn.dataset.spicy;
+    updateStats();
+  });
+});
+
+typeBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    typeBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentType = btn.dataset.type;
+    updateStats();
+  });
+});
+
+recommendBtn.addEventListener('click', () => {
+  // 播放"吃什么"音效
+  const audio = document.getElementById('recommendSound');
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+  recommendFood();
+});
+
+dislikeBtn.addEventListener('click', () => {
+  if (!currentPick) return;
+  if (!blacklist.includes(currentPick.name)) {
+    blacklist.push(currentPick.name);
+    localStorage.setItem('food_blacklist', JSON.stringify(blacklist));
+  }
+  updateBlacklist();
+  updateStats();
+  // 加入黑名单后自动再推荐一个
+  recommendFood();
+});
+
+clearBlacklistBtn.addEventListener('click', () => {
+  blacklist = [];
+  localStorage.removeItem('food_blacklist');
+  updateBlacklist();
+  updateStats();
+});
+
+// ========== 核心逻辑 ==========
+function getFilteredFoods(excludeHistory = true) {
+  let list = foods.filter(f => f.price <= currentBudget);
+
+  if (currentSpicy === 'yes') list = list.filter(f => f.spicy === true);
+  if (currentSpicy === 'no') list = list.filter(f => f.spicy === false);
+
+  if (currentType !== 'all') list = list.filter(f => f.type === currentType);
+
+  // 排除黑名单（硬性排除，不自动放宽）
+  list = list.filter(f => !blacklist.includes(f.name));
+
+  // 进阶：排除最近推荐过的
+  if (excludeHistory && recentHistory.length > 0) {
+    const filtered = list.filter(f => !recentHistory.includes(f.name));
+    // 如果排除后还有候选，就用排除后的；如果排除后没了，就不排除（处理候选不足的情况）
+    if (filtered.length > 0) return filtered;
+  }
+
+  return list;
+}
+
+function recommendFood() {
+  const candidates = getFilteredFoods(true);
+
+  if (candidates.length === 0) {
+    resultCard.classList.remove('show');
+    noResult.classList.add('show');
+    return;
+  }
+
+  noResult.classList.remove('show');
+
+  // 随机选一个
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  currentPick = pick;
+
+  // 更新最近历史（最多3个）
+  recentHistory = recentHistory.filter(name => name !== pick.name);
+  recentHistory.unshift(pick.name);
+  if (recentHistory.length > 3) recentHistory.pop();
+
+  // 展示结果
+  resultEmoji.textContent = pick.emoji;
+  resultName.textContent = pick.name;
+  resultPrice.textContent = '💰 ' + pick.price + '元';
+  resultPlace.textContent = '📍 ' + pick.place;
+  resultSpicy.textContent = pick.spicy ? '🌶️ 辣' : '😌 不辣';
+  resultSpicy.className = 'info-tag ' + (pick.spicy ? 'spicy-tag' : 'nospicy-tag');
+
+  const typeMap = {
+    rice: '米饭类', noodle: '面/粉类', snack: '小吃类', soup: '汤/粥类',
+    bbq: '烧烤类', hotpot: '火锅/煲类', western: '西餐/轻食', dessert: '甜品/饮品'
+  };
+  resultType.textContent = typeMap[pick.type] || '';
+
+  resultCard.classList.remove('show');
+  // 强制重绘以触发动画
+  void resultCard.offsetWidth;
+  resultCard.classList.add('show');
+
+  updateHistory();
+  updateStats();
+}
+
+function updateHistory() {
+  if (recentHistory.length === 0) {
+    historyCard.style.display = 'none';
+    return;
+  }
+  historyCard.style.display = 'block';
+  historyList.innerHTML = recentHistory.map(name => '<span>' + name + '</span>').join('');
+}
+
+function updateBlacklist() {
+  if (blacklist.length === 0) {
+    blacklistCard.style.display = 'none';
+    return;
+  }
+  blacklistCard.style.display = 'block';
+  blacklistList.innerHTML = blacklist.map(name => '<span>' + name + '</span>').join('');
+}
+
+function updateStats() {
+  const total = getFilteredFoods(false).length;
+  statsEl.textContent = '当前条件下共有 ' + total + ' 种可选';
+}
+
+// 初始化
+updateStats();
+updateBlacklist();
+</script>
+</body>
+</html>
